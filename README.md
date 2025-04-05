@@ -2,6 +2,10 @@
 
 A Houdini plugin for generating 3D models from images using Hunyuan3D, Tencent's text-to-3D and image-to-3D model.
 
+![2025-04-0516-49-40-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/9863482d-c09a-4d82-934d-adc3236f6498)
+
+![2025-04-0516-49-40-ezgif com-video-to-gif-converter (1)](https://github.com/user-attachments/assets/943a59a8-54d7-4141-a3aa-a93e1ff3d1c4)
+
 ## Overview
 
 This plugin integrates Hunyuan3D models directly into Houdini, allowing artists and technical directors to generate 3D models from single images or multi-view images with a user-friendly interface. The tool supports both Hunyuan's "mini" mode (single image) and "mv" mode (multi-view images).
