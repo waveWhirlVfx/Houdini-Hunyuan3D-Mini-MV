@@ -48,6 +48,8 @@ This plugin integrates Hunyuan3D models directly into Houdini, allowing artists 
 ```bash
 pip install hy3dgen trimesh psutil
 ```
+![Recording2025-04-05170145-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/0870d74c-65e5-4d90-ac82-307aa83369d7)
+
 
 2. Copy paste the `Hunyuan min-mv-combined.py` code Directly to your Houdini Python panel.
 
