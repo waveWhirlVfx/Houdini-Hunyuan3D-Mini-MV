@@ -59,6 +59,24 @@ def aggressive_gpu_cleanup():
     # Optional: log a memory summary for tracking
     print("GPU Memory Summary after cleanup:")
     print(torch.cuda.memory_summary())
+    
+    # Additional cleanup measures
+    try:
+        # Force synchronization and free cached memory
+        torch.cuda.synchronize(device=None)
+        # Set all tensors to None for any residual objects
+        for obj in gc.get_objects():
+            try:
+                if torch.is_tensor(obj):
+                    obj.detach().cpu()
+            except:
+                pass
+        # Run garbage collection multiple times to ensure freed references
+        for _ in range(3):
+            gc.collect()
+        torch.cuda.empty_cache()
+    except Exception as e:
+        print(f"Extended GPU cleanup error: {e}")
 
 # -------------------------------------------------------
 # Worker for Mini Mode (Single Image)
@@ -151,8 +169,12 @@ class MiniGenerateWorker(QtCore.QObject):
             return
 
         self.progress.emit("Mini model generated and imported successfully!")
-        # Aggressive cleanup after job completion
-        aggressive_gpu_cleanup()
+        # More thorough cleanup after job completion
+        if device == "cuda":
+            pipeline = None  # Release reference
+            mesh = None  # Release reference
+            torch.cuda.synchronize()
+            aggressive_gpu_cleanup()
         self.finished.emit()
 
 # -------------------------------------------------------
@@ -235,8 +257,12 @@ class MVGenerateWorker(QtCore.QObject):
             return
 
         self.progress.emit("MV model generated and imported successfully!")
-        # Aggressive cleanup after job completion
-        aggressive_gpu_cleanup()
+        # More thorough cleanup after job completion
+        if device == "cuda":
+            pipeline = None  # Release reference
+            mesh = None  # Release reference
+            torch.cuda.synchronize()
+            aggressive_gpu_cleanup()
         self.finished.emit()
 
 # -------------------------------------------------------
@@ -326,11 +352,26 @@ def onCreateInterface():
             self.worker = None
             self.job_queue = []
             self.current_job_index = 0
+            self.setWindowTitle("Hunyuan 3D Generator")  # Added window title
             self.initUI()
 
         def initUI(self):
             """Initialize the user interface."""
             main_layout = QtWidgets.QVBoxLayout(self)
+
+            # Title and Header
+            title_label = QtWidgets.QLabel("Hunyuan 3D Generator")
+            title_font = QtGui.QFont()
+            title_font.setPointSize(14)
+            title_font.setBold(True)
+            title_label.setFont(title_font)
+            title_label.setAlignment(QtCore.Qt.AlignCenter)
+            main_layout.addWidget(title_label)
+            
+            subtitle_label = QtWidgets.QLabel("Generate 3D models from images")
+            subtitle_label.setAlignment(QtCore.Qt.AlignCenter)
+            main_layout.addWidget(subtitle_label)
+            main_layout.addSpacing(10)
 
             # Mode selection
             mode_layout = QtWidgets.QHBoxLayout()
@@ -408,20 +449,40 @@ def onCreateInterface():
             btn_layout = QtWidgets.QHBoxLayout()
             self.generate_btn = QtWidgets.QPushButton("Generate 3D Model")
             self.generate_btn.clicked.connect(self.on_generate_clicked)
+            self.generate_btn.setMinimumHeight(40)
+            generate_font = QtGui.QFont()
+            generate_font.setBold(True)
+            self.generate_btn.setFont(generate_font)
             btn_layout.addWidget(self.generate_btn)
             self.clean_gpu_btn = QtWidgets.QPushButton("Clean GPU & Unload Models")
             self.clean_gpu_btn.clicked.connect(self.on_clean_gpu_clicked)
             btn_layout.addWidget(self.clean_gpu_btn)
             main_layout.addLayout(btn_layout)
+            
+            # Status area
+            status_layout = QtWidgets.QVBoxLayout()
+            status_label = QtWidgets.QLabel("Status:")
+            status_layout.addWidget(status_label)
             self.status_output = QtWidgets.QTextEdit()
             self.status_output.setReadOnly(True)
-            main_layout.addWidget(self.status_output)
+            self.status_output.setMinimumHeight(100)
+            status_layout.addWidget(self.status_output)
+            main_layout.addLayout(status_layout)
 
             # Progress Bar
+            progress_layout = QtWidgets.QVBoxLayout()
+            progress_label = QtWidgets.QLabel("Progress:")
+            progress_layout.addWidget(progress_label)
             self.progress_bar = QtWidgets.QProgressBar()
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setValue(0)
-            main_layout.addWidget(self.progress_bar)
+            progress_layout.addWidget(self.progress_bar)
+            main_layout.addLayout(progress_layout)
+
+            # Footer
+            footer_label = QtWidgets.QLabel("Hunyuan 3D Generator - Powered by Tencent")
+            footer_label.setAlignment(QtCore.Qt.AlignCenter)
+            main_layout.addWidget(footer_label)
 
             self.update_ui()
 
@@ -440,12 +501,14 @@ def onCreateInterface():
                     "hunyuan3d-dit-v2-mini-turbo",
                     "hunyuan3d-dit-v2-mini"
                 ])
+                self.setWindowTitle("Hunyuan 3D Generator - Mini Mode")
             else:
                 self.variant_combo.addItems([
                     "hunyuan3d-dit-v2-mv-fast",
                     "hunyuan3d-dit-v2-mv-turbo",
                     "hunyuan3d-dit-v2-mv"
                 ])
+                self.setWindowTitle("Hunyuan 3D Generator - Multi-View Mode")
 
         def add_job(self):
             """Add a new job widget."""
@@ -470,19 +533,43 @@ def onCreateInterface():
 
         def on_clean_gpu_clicked(self):
             """Handle GPU cleanup button click."""
+            self.status_output.append("Starting GPU cleanup...")
             result = unload_models_and_clean_gpu()
             self.status_output.append(result)
             aggressive_gpu_cleanup()
+            self.status_output.append("Deep GPU cleanup completed.")
+            
+            # Display current memory usage
+            if self.device_combo.currentText() == "cuda":
+                try:
+                    current_mem = torch.cuda.memory_allocated() / (1024 * 1024)
+                    self.status_output.append(f"Current GPU memory usage: {current_mem:.2f} MB")
+                except Exception as e:
+                    self.status_output.append(f"Could not get memory info: {e}")
+
+        def ensure_output_directory_exists(self, output_path):
+            """Ensure the output directory exists."""
+            output_dir = os.path.dirname(output_path)
+            if not os.path.exists(output_dir):
+                try:
+                    os.makedirs(output_dir)
+                    self.status_output.append(f"Created output directory: {output_dir}")
+                except Exception as e:
+                    self.status_output.append(f"Failed to create output directory: {str(e)}")
+                    return False
+            return True
 
         def on_generate_clicked(self):
             """Handle generate button click with batch processing."""
             # Initial GPU cleanup before starting generation
+            self.status_output.append("Preparing for generation - cleaning GPU...")
             result = unload_models_and_clean_gpu()
             self.status_output.append(f"GPU Cleanup: {result}")
             if self.device_combo.currentText() == "cuda":
                 torch.cuda.synchronize()
                 time.sleep(2)
                 aggressive_gpu_cleanup()
+                self.status_output.append("Deep GPU cleanup completed.")
 
             mode = self.mode_combo.currentText()
             total_jobs = len(self.job_widgets)
@@ -501,25 +588,39 @@ def onCreateInterface():
             out_format = self.out_format_combo.currentText()
             base_node_name = self.node_name_edit.text().strip() or "hunyuan_model"
 
+            # Ensure output directory exists
+            if not self.ensure_output_directory_exists(base_output_path):
+                return
+
             self.job_queue = []
             for i, job_widget in enumerate(self.job_widgets, start=1):
                 output_path = f"{base}_job{i}{ext}"
                 node_name = f"{base_node_name}_job{i}"
                 if mode == "mini":
                     input_path = job_widget.image_line.text()
+                    if not input_path or not os.path.exists(input_path):
+                        self.status_output.append(f"Job {i}: Invalid input image path")
+                        continue
                     params = (input_path, steps, octree_resolution, num_chunks, 12345, 7.5,
                               device, model_variant, remove_bg, out_format, node_name, output_path)
                 else:
                     front_path = job_widget.front_line.text()
                     left_path = job_widget.left_line.text()
                     back_path = job_widget.back_line.text()
+                    if not all([front_path, left_path, back_path]) or not all(os.path.exists(p) for p in [front_path, left_path, back_path]):
+                        self.status_output.append(f"Job {i}: One or more image paths are invalid")
+                        continue
                     params = (front_path, left_path, back_path, steps, octree_resolution,
                               num_chunks, device, model_variant, output_path, node_name)
                 self.job_queue.append(params)
 
+            if not self.job_queue:
+                self.status_output.append("No valid jobs to process.")
+                return
+
             self.generate_btn.setEnabled(False)
             self.current_job_index = 1
-            self.status_output.append(f"Starting job 1 of {total_jobs}")
+            self.status_output.append(f"Starting job 1 of {len(self.job_queue)}")
             self.progress_bar.setValue(0)
             params = self.job_queue.pop(0)
             self.start_job(params)
@@ -543,17 +644,32 @@ def onCreateInterface():
             """Handle job completion and perform cleanup before starting next job."""
             self.thread.quit()
             self.thread.wait()
-            aggressive_gpu_cleanup()
+            
+            # Thorough GPU cleanup between jobs
+            if self.device_combo.currentText() == "cuda":
+                self.status_output.append(f"Job {self.current_job_index} completed. Cleaning GPU...")
+                aggressive_gpu_cleanup()
+                try:
+                    current_mem = torch.cuda.memory_allocated() / (1024 * 1024)
+                    self.status_output.append(f"Current GPU memory after cleanup: {current_mem:.2f} MB")
+                except Exception as e:
+                    self.status_output.append(f"Could not get memory info: {e}")
+            
             total_jobs = len(self.job_widgets)
             if self.job_queue:
                 self.current_job_index += 1
                 self.status_output.append(f"Starting job {self.current_job_index} of {total_jobs}")
                 self.progress_bar.setValue(0)
                 params = self.job_queue.pop(0)
-                self.start_job(params)
+                # Add a short delay to ensure complete cleanup
+                QtCore.QTimer.singleShot(2000, lambda: self.start_job(params))
             else:
                 self.generate_btn.setEnabled(True)
                 self.status_output.append("All jobs completed.")
+                self.status_output.append("Performing final GPU cleanup...")
+                unload_models_and_clean_gpu()
+                aggressive_gpu_cleanup()
+                self.status_output.append("Final cleanup completed.")
 
     return Interface()
 
