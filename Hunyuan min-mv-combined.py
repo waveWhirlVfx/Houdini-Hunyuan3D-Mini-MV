@@ -34,7 +34,7 @@ def get_pipeline(model_variant, device, model_id):
     return _model_pipelines[key]
 
 def unload_models_and_clean_gpu():
-    """Unload all cached models and clean GPU memory."""
+    """Unload all cached models and perform cleanup."""
     global _model_pipelines
     with _model_lock:
         _model_pipelines.clear()
@@ -45,6 +45,20 @@ def unload_models_and_clean_gpu():
         return "Models unloaded and GPU cache cleaned successfully."
     except Exception as e:
         return f"Error cleaning GPU: {str(e)}"
+
+def aggressive_gpu_cleanup():
+    """Perform aggressive GPU cleanup to minimize fragmentation and lingering references."""
+    torch.cuda.synchronize()
+    time.sleep(2)  # Allow any asynchronous operations to complete
+    gc.collect()
+    try:
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+    except Exception as e:
+        print("Aggressive cleanup error:", e)
+    # Optional: log a memory summary for tracking
+    print("GPU Memory Summary after cleanup:")
+    print(torch.cuda.memory_summary())
 
 # -------------------------------------------------------
 # Worker for Mini Mode (Single Image)
@@ -137,6 +151,8 @@ class MiniGenerateWorker(QtCore.QObject):
             return
 
         self.progress.emit("Mini model generated and imported successfully!")
+        # Aggressive cleanup after job completion
+        aggressive_gpu_cleanup()
         self.finished.emit()
 
 # -------------------------------------------------------
@@ -219,6 +235,8 @@ class MVGenerateWorker(QtCore.QObject):
             return
 
         self.progress.emit("MV model generated and imported successfully!")
+        # Aggressive cleanup after job completion
+        aggressive_gpu_cleanup()
         self.finished.emit()
 
 # -------------------------------------------------------
@@ -432,7 +450,7 @@ def onCreateInterface():
         def add_job(self):
             """Add a new job widget."""
             mode = self.mode_combo.currentText()
-            job_widget = JobWidget(mode, self, parent=self.job_group)  # Pass self as interface
+            job_widget = JobWidget(mode, self, parent=self.job_group)
             self.job_widgets.append(job_widget)
             self.job_layout.addWidget(job_widget)
 
@@ -454,11 +472,18 @@ def onCreateInterface():
             """Handle GPU cleanup button click."""
             result = unload_models_and_clean_gpu()
             self.status_output.append(result)
+            aggressive_gpu_cleanup()
 
         def on_generate_clicked(self):
             """Handle generate button click with batch processing."""
-            cleanup = unload_models_and_clean_gpu()
-            self.status_output.append(f"GPU Cleanup: {cleanup}")
+            # Initial GPU cleanup before starting generation
+            result = unload_models_and_clean_gpu()
+            self.status_output.append(f"GPU Cleanup: {result}")
+            if self.device_combo.currentText() == "cuda":
+                torch.cuda.synchronize()
+                time.sleep(2)
+                aggressive_gpu_cleanup()
+
             mode = self.mode_combo.currentText()
             total_jobs = len(self.job_widgets)
             if total_jobs == 0:
@@ -502,7 +527,10 @@ def onCreateInterface():
         def start_job(self, params):
             """Start processing a single job."""
             mode = self.mode_combo.currentText()
-            self.worker = MiniGenerateWorker(params) if mode == "mini" else MVGenerateWorker(params)
+            if mode == "mini":
+                self.worker = MiniGenerateWorker(params)
+            else:
+                self.worker = MVGenerateWorker(params)
             self.thread = QtCore.QThread()
             self.worker.moveToThread(self.thread)
             self.worker.progress.connect(lambda msg: self.status_output.append(f"Job {self.current_job_index}: {msg}"))
@@ -512,9 +540,10 @@ def onCreateInterface():
             self.thread.start()
 
         def on_job_finished(self):
-            """Handle job completion and proceed to next job."""
+            """Handle job completion and perform cleanup before starting next job."""
             self.thread.quit()
             self.thread.wait()
+            aggressive_gpu_cleanup()
             total_jobs = len(self.job_widgets)
             if self.job_queue:
                 self.current_job_index += 1
