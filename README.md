@@ -47,7 +47,7 @@ This plugin integrates Hunyuan3D models directly into Houdini, allowing artists 
 1. Install the required Python packages: in Houdini you can use Mlops for pip install.(Cuda 12.4 required)
 ```bash
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-pip install hy3dgen trimesh psutil, ninja, pybind11, diffusers, einops, opencv-python, numpy, transformers, omegaconf, trimesh, pymeshlab, pygltflib, xatlas,gradio, fastapi, uvicorn, rembg, onnxruntime
+pip install hy3dgen trimesh psutil, ninja, pybind11, diffusers, einops, opencv-python, numpy, transformers, omegaconf, pymeshlab, pygltflib, xatlas,gradio, fastapi, uvicorn, rembg, onnxruntime
 ```
 ![Recording2025-04-05170145-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/0870d74c-65e5-4d90-ac82-307aa83369d7)
 
