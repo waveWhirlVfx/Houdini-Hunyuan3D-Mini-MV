@@ -44,7 +44,7 @@ This plugin integrates Hunyuan3D models directly into Houdini, allowing artists 
 
 ## Installation
 
-1. Install the required Python packages: in Houdini you can use Mlops for pip install.
+1. Install the required Python packages: in Houdini you can use Mlops for pip install.(Cuda 12.4 required)
 ```bash
 pip install hy3dgen trimesh psutil,
 ninja, pybind11, diffusers, einops, opencv-python, numpy, torch, transformers, torchvision, omegaconf, trimesh, pymeshlab, pygltflib, xatlas,gradio, fastapi, uvicorn, rembg, onnxruntime
