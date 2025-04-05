@@ -40,20 +40,12 @@ This plugin integrates Hunyuan3D models directly into Houdini, allowing artists 
 
 ## Installation
 
-1. Install the required Python packages:
+1. Install the required Python packages: in Houdini you can use Mlops for pip install.
 ```bash
 pip install hy3dgen trimesh psutil
 ```
 
-2. Copy the `Hunyuan min-mv-combined.py` file to your Houdini Python scripts directory:
-```bash
-$HOUDINI_USER_PREF_DIR/scripts/
-```
-
-3. Restart Houdini or run the following in a Python panel:
-```python
-import hunyuan_min_mv_combined
-```
+2. Copy paste the `Hunyuan min-mv-combined.py` code Directly to your Houdini Python panel.
 
 ## Usage
 
