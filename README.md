@@ -1,6 +1,6 @@
 # Hunyuan 3D Generator for Houdini
 
-A Houdini plugin for generating 3D models from images using Hunyuan3D, Tencent's text-to-3D and image-to-3D model.
+A Houdini plugin for generating 3D models from images using Hunyuan3D, Tencent's image-to-3D model.
 
 ![2025-04-0516-49-40-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/9863482d-c09a-4d82-934d-adc3236f6498)
 
